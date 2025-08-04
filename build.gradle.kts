@@ -25,6 +25,7 @@ dependencies {
         bundledPlugin("com.intellij.java")
         plugin("EclipseCodeFormatter:23.5.241.000.0-Eclipse_2024-09")
         plugin("CheckStyle-IDEA:5.109.2")
+        plugin("PsiViewer:251.175")
     }
 }
 

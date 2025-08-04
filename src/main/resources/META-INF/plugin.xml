@@ -14,10 +14,9 @@
     <depends>com.intellij.modules.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-
+        <codeInsight.lineMarkerProvider language="JAVA" implementationClass="co.elastic.elasticsearch.listener.visualizer.ListenerLineMarkerProvider"/>
     </extensions>
 
     <actions>
-        <action id="SampleAction" text="Sample Action" class="co.elastic.elasticsearch.listener.visualizer.SampleAction"/>
     </actions>
 </idea-plugin>
