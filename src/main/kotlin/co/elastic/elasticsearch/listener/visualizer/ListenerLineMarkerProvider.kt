@@ -7,9 +7,14 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.psi.PsiClassType
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiMethod
 import com.intellij.psi.PsiMethodCallExpression
+import com.intellij.psi.PsiParameter
 import com.intellij.psi.PsiParameterList
+import com.intellij.psi.PsiReferenceExpression
+import com.intellij.psi.PsiVariable
 import com.intellij.psi.SmartPointerManager
 import com.intellij.psi.SmartPsiElementPointer
 import com.intellij.psi.search.searches.ReferencesSearch
@@ -76,29 +81,62 @@ class ListenerLineMarkerProvider: LineMarkerProvider {
         }
 
         private fun categorize(element: PsiElement, depth: Int): ListenerTreeNode {
+            // TODO detect and prevent recursion
             if (element.parent.parent is PsiMethodCallExpression) {
                 val call = element.parent.parent as PsiMethodCallExpression
-                val methodName = call.methodExpression.referenceName
-                return when (methodName) {
-                    "onResponse" -> ListenerTreeNode(element, "resolved with a result")
-                    "onFailure" -> ListenerTreeNode(element, "resolved with failure")
+                val signature = signature(call)
+                return when (signature) {
+                    "org.elasticsearch.action.ActionListener:onResponse" -> ListenerTreeNode(element, "resolved with a result")
+                    "org.elasticsearch.action.ActionListener:onFailure" -> ListenerTreeNode(element, "resolved with failure")
+                    "org.elasticsearch.action.ActionListener:delegateResponse" -> {
+                        ListenerTreeNode(element, "delegates response").apply {
+                            insert(categorize(call, depth - 1), 0)
+                        }
+                    }
+                    "org.elasticsearch.action.ActionListener:delegateFailure" -> {
+                        ListenerTreeNode(element, "delegates failure").apply {
+                            insert(categorize(call, depth - 1), 0)
+                        }
+                    }
+                    "org.elasticsearch.action.ActionListener:delegateFailureAndWrap" -> {
+                        ListenerTreeNode(element, "delegates and wraps failure").apply {
+                            insert(categorize(call, depth - 1), 0)
+                        }
+                    }
+                    "org.elasticsearch.action.ActionListener:map" -> {
+                        ListenerTreeNode(element, "is mapped").apply {
+                            insert(categorize(call, depth - 1), 0)
+                        }
+                    }
                     else -> {
+                        val methodName = call.methodExpression.referenceName
                         val paramIndex = call.argumentList.expressions.indexOf(element)
                         val target = call.methodExpression.resolve()
                         if (target != null && paramIndex != -1 && depth >= 0) {
                             val param = target.childrenOfType<PsiParameterList>()[0].parameters[paramIndex]
-                            val usages = explore(param, depth - 1, "passed as ${param.name} in $methodName(..)")
                             ListenerTreeNode(element, "passed as an argument to $methodName(..) call").apply {
-                                insert(usages, 0)
+                                insert(explore(param, depth - 1, "passed as ${param.name} in $methodName(..)"), 0)
                             }
                         } else {
                             ListenerTreeNode(element, "passed as an argument to $methodName(..) call")
                         }
                     }
                 }
-            } else {
-                return ListenerTreeNode(element, "non analyzed")
             }
+            return ListenerTreeNode(element, "non analyzed")
+        }
+
+        private fun signature(call: PsiMethodCallExpression): String {
+            if (call.methodExpression.reference == null) {
+                return "unknown"
+            }
+            val method = call.methodExpression.reference!!.resolve() as PsiMethod
+            return "${method.containingClass?.qualifiedName}:${method.name}"
+//
+//
+//            val className = (((call.methodExpression.qualifier as PsiReferenceExpression).resolve() as PsiVariable).type as PsiClassType).rawType().canonicalText
+//            val methodName = call.methodExpression.referenceName
+//            return "$className:$methodName"
         }
     }
 
