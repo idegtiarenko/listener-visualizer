@@ -1,11 +1,13 @@
 package co.elastic.elasticsearch.listener.visualizer
 
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.signature
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.psi.PsiAssignmentExpression
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiLambdaExpression
 import com.intellij.psi.PsiMethodCallExpression
 import com.intellij.psi.PsiParameterList
 import com.intellij.psi.SmartPointerManager
@@ -46,12 +48,39 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
 
     private fun explore(element: PsiElement, depth: Int, description: String): ListenerTreeNode {
         val root = ListenerTreeNode(element, description)
+        return exploreFrom(element, root, depth)
+    }
+
+    /**
+     * Find all references to the element and attach them to the root node.
+     * The references are categorized based on the method call signature.
+     */
+    private fun exploreFrom(element: PsiElement, root: ListenerTreeNode, depth: Int): ListenerTreeNode {
         ReferencesSearch.search(element).findAll()
             .map { categorize(it.element, depth) }
-            .sortedWith (compareBy({it.location.file}, {it.location.line}))
+            .sortedWith(compareBy({ it.location.file }, { it.location.line }))
             .forEachIndexed { i, node ->
                 root.insert(node, i)
             }
+        return root
+    }
+
+    private fun exploreDelegate(delegate: PsiElement, depth: Int, description: String): ListenerTreeNode {
+        // Delegate structure: listener.delegateFailure((l, indexResolution) -> { code using l })
+        // We need to find "l" and explore the code with l as the element
+        val root = ListenerTreeNode(delegate, description)
+        val call = delegate.parent.parent as PsiMethodCallExpression
+        val argLambda = call.argumentList.expressions[0]
+        if (argLambda is PsiLambdaExpression && argLambda.body != null) {
+            // Find the first parameter of the lambda, which is the listener
+            val lambdaParams = argLambda.parameterList.parameters
+            if (lambdaParams.isNotEmpty()) {
+                val listenerParam = lambdaParams[0]
+                // Explore the body of the lambda with the new listener parameter
+                // TODO: can we rename it so it reports "listener" instead of "l"?
+                return exploreFrom(listenerParam, root, depth)
+            }
+        }
         return root
     }
 
@@ -61,28 +90,34 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
             val call = element.parent.parent as PsiMethodCallExpression
             val signature = signature(call)
             return when (signature) {
-                "org.elasticsearch.action.ActionListener:onResponse" -> ListenerTreeNode(element, "resolved with a result")
-                "org.elasticsearch.action.ActionListener:onFailure" -> ListenerTreeNode(element, "resolved with failure")
+                "org.elasticsearch.action.ActionListener:onResponse" -> ListenerTreeNode(
+                    element,
+                    "resolved with a result"
+                )
+
+                "org.elasticsearch.action.ActionListener:onFailure" -> ListenerTreeNode(
+                    element,
+                    "resolved with failure"
+                )
+
                 "org.elasticsearch.action.ActionListener:delegateResponse" -> {
-                    ListenerTreeNode(element, "delegates response").apply {
-                        insert(categorize(call, depth - 1), 0)
-                    }
+                    exploreDelegate(element, depth - 1, "handles failure")
                 }
+
                 "org.elasticsearch.action.ActionListener:delegateFailure" -> {
-                    ListenerTreeNode(element, "delegates failure").apply {
-                        insert(categorize(call, depth - 1), 0)
-                    }
+                    exploreDelegate(element, depth - 1, "handles result")
                 }
+
                 "org.elasticsearch.action.ActionListener:delegateFailureAndWrap" -> {
-                    ListenerTreeNode(element, "delegates and wraps failure").apply {
-                        insert(categorize(call, depth - 1), 0)
-                    }
+                    exploreDelegate(element, depth - 1, "handles result with wrap")
                 }
+
                 "org.elasticsearch.action.ActionListener:map" -> {
                     ListenerTreeNode(element, "is mapped").apply {
                         insert(categorize(call, depth - 1), 0)
                     }
                 }
+
                 else -> {
                     val methodName = call.methodExpression.referenceName
                     val paramIndex = call.argumentList.expressions.indexOf(element)
@@ -104,17 +139,20 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
         return ListenerTreeNode(element, "non analyzed")
     }
 
-    class ListenerTreeNode(element: PsiElement, val description: String) : DefaultMutableTreeNode() {
+    class ListenerTreeNode(element: PsiElement, val description: String): DefaultMutableTreeNode() {
 
         val location: Location = Location.from(element)
         private val pointer: SmartPsiElementPointer<PsiElement> =
             SmartPointerManager.getInstance(element.project).createSmartPsiElementPointer(element)
 
-        fun element(): PsiElement?  = pointer.element
+        fun element(): PsiElement? = pointer.element
 
         override fun toString(): String {
-            return if (pointer.element?.isValid?:false) describe(pointer.element!!) else "<Invalidated>"
+            return ApplicationManager.getApplication().runReadAction<String> {
+                if (pointer.element?.isValid?:false) describe(pointer.element!!) else "<Invalidated>"
+            }
         }
+
         private fun describe(element: PsiElement): String = "${element.text} $description at $location"
     }
 
@@ -126,6 +164,7 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
                 return Location(file.name, line)
             }
         }
+
         override fun toString(): String = "$file:$line"
     }
 }
