@@ -1,17 +1,13 @@
 package co.elastic.elasticsearch.listener.visualizer
 
+import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isActionListenerWrapper
+import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isDelegate
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.signature
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ui.DialogWrapper
-import com.intellij.psi.PsiAssignmentExpression
-import com.intellij.psi.PsiElement
-import com.intellij.psi.PsiLambdaExpression
-import com.intellij.psi.PsiMethodCallExpression
-import com.intellij.psi.PsiParameterList
-import com.intellij.psi.SmartPointerManager
-import com.intellij.psi.SmartPsiElementPointer
+import com.intellij.psi.*
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.childrenOfType
 import com.intellij.ui.components.JBScrollPane
@@ -29,6 +25,7 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
         title = "ActionListeners flow"
         isModal = false
     }
+
 
     override fun createCenterPanel(): JComponent? {
         return JBScrollPane(Tree(explore(element, 5, "inspected")).apply {
@@ -57,7 +54,7 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
      */
     private fun exploreFrom(element: PsiElement, root: ListenerTreeNode, depth: Int): ListenerTreeNode {
         ReferencesSearch.search(element).findAll()
-            .map { categorize(it.element, depth) }
+            .mapNotNull { categorize(it.element, depth) }
             .sortedWith(compareBy({ it.location.file }, { it.location.line }))
             .forEachIndexed { i, node ->
                 root.insert(node, i)
@@ -84,7 +81,29 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
         return root
     }
 
-    private fun categorize(element: PsiElement, depth: Int): ListenerTreeNode {
+    private fun categorizeAssignment(element: PsiElement): ListenerTreeNode? {
+        val assignment = element.parent as? PsiAssignmentExpression ?: return null
+        val defaultNode = ListenerTreeNode(element, "re-assigned")
+        val call = assignment.rExpression as? PsiMethodCallExpression ?: return defaultNode
+        val signature = signature(call)
+        if (isDelegate(signature)) {
+            // This is a delegate, we handle it elsewhere
+            return null
+        }
+
+        if (isActionListenerWrapper(signature)) {
+            val assigned = assignment.lExpression
+            val listener = call.argumentList.expressions[0]
+            if (listener.text.equals(assigned.text)) {
+                // This is a wrapper indeed
+                return ListenerTreeNode(assigned, "is wrapped by " + signature.substringAfterLast("."))
+            }
+        }
+
+        return defaultNode
+    }
+
+    private fun categorize(element: PsiElement, depth: Int): ListenerTreeNode? {
         // TODO detect and prevent recursion
         if (element.parent.parent is PsiMethodCallExpression) {
             val call = element.parent.parent as PsiMethodCallExpression
@@ -112,13 +131,20 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
                     exploreDelegate(element, depth - 1, "handles result with wrap")
                 }
 
-                "org.elasticsearch.action.ActionListener:map" -> {
+                "org.elasticsearch.action.ActionListener:delegateFailureIgnoreResponseAndWrap" -> {
+                    exploreDelegate(element, depth - 1, "ignores result with wrap")
+                }
+
+                "org.elasticsearch.action.ActionListener:map", "org.elasticsearch.action.ActionListener:safeMap" -> {
                     ListenerTreeNode(element, "is mapped").apply {
                         insert(categorize(call, depth - 1), 0)
                     }
                 }
 
                 else -> {
+                    if (isActionListenerWrapper(signature)) {
+                        return null
+                    }
                     val methodName = call.methodExpression.referenceName
                     val paramIndex = call.argumentList.expressions.indexOf(element)
                     val target = call.methodExpression.resolve()
@@ -133,9 +159,11 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
                 }
             }
         }
+
         if (element.parent is PsiAssignmentExpression) {
-            return ListenerTreeNode(element, "re-assigned")
+            return categorizeAssignment(element)
         }
+
         return ListenerTreeNode(element, "non analyzed")
     }
 
@@ -149,7 +177,7 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
 
         override fun toString(): String {
             return ApplicationManager.getApplication().runReadAction<String> {
-                if (pointer.element?.isValid?:false) describe(pointer.element!!) else "<Invalidated>"
+                if (pointer.element?.isValid ?: false) describe(pointer.element!!) else "<Invalidated>"
             }
         }
 
@@ -160,7 +188,7 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
         companion object {
             fun from(element: PsiElement): Location {
                 val file = element.containingFile.virtualFile
-                val line = FileDocumentManager.getInstance().getDocument(file)?.getLineNumber(element.textOffset)?:-1
+                val line = FileDocumentManager.getInstance().getDocument(file)?.getLineNumber(element.textOffset) ?: -1
                 return Location(file.name, line)
             }
         }

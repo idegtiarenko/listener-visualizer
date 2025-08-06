@@ -26,4 +26,26 @@ object ActionListenerPsiUtils {
             else -> false
         }
     }
+
+    fun isActionListenerWrapper(signature: String?): Boolean {
+        if (signature == null) {
+            return false
+        }
+        return signature.equals("org.elasticsearch.action.ActionListener:runBefore") ||
+                signature.equals("org.elasticsearch.action.ActionListener:runAfter") ||
+                signature.equals("org.elasticsearch.action.ActionListener:releaseBefore") ||
+                signature.equals("org.elasticsearch.action.ActionListener:releaseAfter");
+    }
+
+    fun isDelegate(signature: String?): Boolean {
+        if (signature == null) {
+            return false
+        }
+        return signature.equals("org.elasticsearch.action.ActionListener:delegateResponse") ||
+                signature.equals("org.elasticsearch.action.ActionListener:delegateFailure") ||
+                signature.equals("org.elasticsearch.action.ActionListener:delegateFailureAndWrap") ||
+                signature.equals("org.elasticsearch.action.ActionListener:delegateFailureIgnoreResponseAndWrap");
+    }
+
+
 }
