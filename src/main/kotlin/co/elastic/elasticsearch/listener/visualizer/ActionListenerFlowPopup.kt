@@ -4,6 +4,7 @@ import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.signa
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ui.DialogWrapper
+import com.intellij.psi.PsiAssignmentExpression
 import com.intellij.psi.PsiElement
 import com.intellij.psi.PsiMethodCallExpression
 import com.intellij.psi.PsiParameterList
@@ -96,6 +97,9 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
                     }
                 }
             }
+        }
+        if (element.parent is PsiAssignmentExpression) {
+            return ListenerTreeNode(element, "re-assigned")
         }
         return ListenerTreeNode(element, "non analyzed")
     }
