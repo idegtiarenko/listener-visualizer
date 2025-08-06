@@ -1,5 +1,6 @@
 package co.elastic.elasticsearch.listener.visualizer
 
+import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isActionListener
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isActionListenerWrapper
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isDelegate
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.signature
@@ -150,9 +151,13 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
                     val target = call.methodExpression.resolve()
                     if (target != null && paramIndex != -1 && depth >= 0) {
                         val param = target.childrenOfType<PsiParameterList>()[0].parameters[paramIndex]
-                        ListenerTreeNode(element, "passed as an argument to $methodName(..) call").apply {
-                            insert(explore(param, depth - 1, "passed as ${param.name} in $methodName(..)"), 0)
+                        val passNode = ListenerTreeNode(element, "passed as an argument to $methodName(..) call")
+                        if (isActionListener(param)) {
+                            passNode.apply {
+                                insert(explore(param, depth - 1, "passed as ${param.name} in $methodName(..)"), 0)
+                            }
                         }
+                        passNode
                     } else {
                         ListenerTreeNode(element, "passed as an argument to $methodName(..) call")
                     }
