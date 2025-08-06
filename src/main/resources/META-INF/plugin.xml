@@ -14,9 +14,16 @@
     <depends>com.intellij.modules.java</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <codeInsight.lineMarkerProvider language="JAVA" implementationClass="co.elastic.elasticsearch.listener.visualizer.ListenerLineMarkerProvider"/>
     </extensions>
 
     <actions>
+        <action
+                id="AnalyzeActionListenerAction"
+                class="co.elastic.elasticsearch.listener.visualizer.AnalyzeActionListenerAction"
+                text="Analyze ActionListener"
+                description="Analyzes ActionListener flow to resolution"
+                icon="/co/elastic/elasticsearch/icons/es.png">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
     </actions>
 </idea-plugin>
