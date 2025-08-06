@@ -3,6 +3,7 @@ package co.elastic.elasticsearch.listener.visualizer
 import co.elastic.elasticsearch.icons.Icons
 import com.intellij.codeInsight.daemon.LineMarkerInfo
 import com.intellij.codeInsight.daemon.LineMarkerProvider
+import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.editor.markup.GutterIconRenderer
 import com.intellij.openapi.fileEditor.FileDocumentManager
@@ -37,7 +38,7 @@ class ListenerLineMarkerProvider: LineMarkerProvider {
                 Icons.ES,
                 { psi -> "Implements ActionListener" },
                 { event, psi ->
-                    HelloDialog(psi).show()
+                    HelloDialog(psi.parent).show()
                 },
                 GutterIconRenderer.Alignment.LEFT
             )
@@ -71,10 +72,8 @@ class ListenerLineMarkerProvider: LineMarkerProvider {
 
         private fun explore(element: PsiElement, depth: Int, description: String): ListenerTreeNode {
             val root = ListenerTreeNode(element, description)
-            ReferencesSearch.search(element).findAll()
-                .map { categorize(it.element, depth) }
-                .sortedWith (compareBy({it.location.file}, {it.location.line}))
-                .forEachIndexed { i, node ->
+            ReferencesSearch.search(element).findAll().map { categorize(it.element, depth) }
+                .sortedWith(compareBy({ it.location.file }, { it.location.line })).forEachIndexed { i, node ->
                     root.insert(node, i)
                 }
             return root
@@ -86,28 +85,38 @@ class ListenerLineMarkerProvider: LineMarkerProvider {
                 val call = element.parent.parent as PsiMethodCallExpression
                 val signature = signature(call)
                 return when (signature) {
-                    "org.elasticsearch.action.ActionListener:onResponse" -> ListenerTreeNode(element, "resolved with a result")
-                    "org.elasticsearch.action.ActionListener:onFailure" -> ListenerTreeNode(element, "resolved with failure")
+                    "org.elasticsearch.action.ActionListener:onResponse" -> ListenerTreeNode(
+                        element, "resolved with a result"
+                    )
+
+                    "org.elasticsearch.action.ActionListener:onFailure" -> ListenerTreeNode(
+                        element, "resolved with failure"
+                    )
+
                     "org.elasticsearch.action.ActionListener:delegateResponse" -> {
-                        ListenerTreeNode(element, "delegates response").apply {
+                        ListenerTreeNode(element, "process failure").apply {
                             insert(categorize(call, depth - 1), 0)
                         }
                     }
+
                     "org.elasticsearch.action.ActionListener:delegateFailure" -> {
-                        ListenerTreeNode(element, "delegates failure").apply {
+                        ListenerTreeNode(element, "process result").apply {
                             insert(categorize(call, depth - 1), 0)
                         }
                     }
+
                     "org.elasticsearch.action.ActionListener:delegateFailureAndWrap" -> {
-                        ListenerTreeNode(element, "delegates and wraps failure").apply {
+                        ListenerTreeNode(element, "process result with wrap").apply {
                             insert(categorize(call, depth - 1), 0)
                         }
                     }
+
                     "org.elasticsearch.action.ActionListener:map" -> {
                         ListenerTreeNode(element, "is mapped").apply {
                             insert(categorize(call, depth - 1), 0)
                         }
                     }
+
                     else -> {
                         val methodName = call.methodExpression.referenceName
                         val paramIndex = call.argumentList.expressions.indexOf(element)
@@ -140,17 +149,20 @@ class ListenerLineMarkerProvider: LineMarkerProvider {
         }
     }
 
-    class ListenerTreeNode(element: PsiElement, val description: String) : DefaultMutableTreeNode() {
+    class ListenerTreeNode(element: PsiElement, val description: String): DefaultMutableTreeNode() {
 
         val location: Location = Location.from(element)
         private val pointer: SmartPsiElementPointer<PsiElement> =
             SmartPointerManager.getInstance(element.project).createSmartPsiElementPointer(element)
 
-        fun element(): PsiElement?  = pointer.element
+        fun element(): PsiElement? = pointer.element
 
         override fun toString(): String {
-            return if (pointer.element?.isValid?:false) describe(pointer.element!!) else "<Invalidated>"
+            return ApplicationManager.getApplication().runReadAction<String> {
+                if (pointer.element?.isValid?:false) describe(pointer.element!!) else "<Invalidated>"
+            }
         }
+
         private fun describe(element: PsiElement): String = "${element.text} $description at $location"
     }
 
@@ -162,6 +174,7 @@ class ListenerLineMarkerProvider: LineMarkerProvider {
                 return Location(file.name, line)
             }
         }
+
         override fun toString(): String = "$file:$line"
     }
 }
