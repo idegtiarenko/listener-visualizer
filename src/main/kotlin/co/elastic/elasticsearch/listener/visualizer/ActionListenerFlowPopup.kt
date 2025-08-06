@@ -9,6 +9,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.psi.*
+import com.intellij.psi.javadoc.PsiDocTagValue
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.childrenOfType
 import com.intellij.ui.components.JBScrollPane
@@ -167,6 +168,11 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
 
         if (element.parent is PsiAssignmentExpression) {
             return categorizeAssignment(element)
+        }
+
+        if (element is PsiDocTagValue) {
+            // Ignore doc references for now
+            return null
         }
 
         return ListenerTreeNode(element, "non analyzed")
