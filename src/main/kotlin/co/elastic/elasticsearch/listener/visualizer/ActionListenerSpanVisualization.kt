@@ -26,6 +26,9 @@ class ActionListenerSpanVisualization {
         maxDepth += HEIGHT
         children()
         depth -= HEIGHT
+        if (offset == startOffset) {
+            offset += WIDTH
+        }
         component.add(PointerButton(element, AllIcons.Debugger.Frame, description).apply {
             setBounds(startOffset, startDepth, offset - startOffset, HEIGHT)
         })

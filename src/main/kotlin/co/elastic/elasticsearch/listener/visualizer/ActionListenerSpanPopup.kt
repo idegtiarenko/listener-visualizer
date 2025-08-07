@@ -1,6 +1,5 @@
 package co.elastic.elasticsearch.listener.visualizer
 
-import co.elastic.elasticsearch.listener.visualizer.ActionListenerFlowPopup.ListenerTreeNode
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerFlowPopup.Location
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isActionListenerWrapper
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isDelegate
@@ -46,7 +45,7 @@ class ActionListenerSpanPopup(val element: PsiElement): DialogWrapper(element.pr
             .forEach { categorize(it.element, depth) }
     }
 
-    private fun ActionListenerSpanVisualization.exploreMethodCall(element: PsiElement, depth: Int, replacementText: String? = null) {
+    private fun ActionListenerSpanVisualization.exploreMethodCall(element: PsiElement, depth: Int) {
         if (element.parent.parent !is PsiMethodCallExpression) {
             return
         }
@@ -55,11 +54,11 @@ class ActionListenerSpanPopup(val element: PsiElement): DialogWrapper(element.pr
         val target = call.methodExpression.resolve()
         if (target != null && paramIndex != -1 && depth >= 0) {
             val param = target.childrenOfType<PsiParameterList>()[0].parameters[paramIndex]
-            span(element, replacementText ?: "passed to ${shortSignature(call)}(..)") {
+            span(element, "passed to ${shortSignature(call)}(..)") {
                 exploreFrom(param, depth - 1)
             }
         } else {
-            span(element, replacementText ?: "passed to ${shortSignature(call)}(..)") {
+            span(element, "passed to ${shortSignature(call)}(..)") {
                 // uncategorized usage
             }
         }
@@ -70,14 +69,16 @@ class ActionListenerSpanPopup(val element: PsiElement): DialogWrapper(element.pr
             return
         }
         val call = delegate.parent.parent as PsiMethodCallExpression
-        // explore the usage of the delegate
-        exploreMethodCall(call, depth - 1)
-        val argLambda = call.argumentList.expressions[0]
-        if (argLambda is PsiLambdaExpression && argLambda.body != null && argLambda.parameterList.parameters.isNotEmpty()) {
-            // explore delegated result handling
-            explore(argLambda.parameterList.parameters[0], depth - 1, description)
-        } else {
-            addInfo(delegate, "delegates")
+        span(delegate, "resolution delegated") {
+            // explore the usage of the delegate
+            exploreMethodCall(call, depth - 1)
+            val argLambda = call.argumentList.expressions[0]
+            if (argLambda is PsiLambdaExpression && argLambda.body != null && argLambda.parameterList.parameters.isNotEmpty()) {
+                // explore delegated result handling
+                explore(argLambda.parameterList.parameters[0], depth - 1, description)
+            } else {
+                addInfo(delegate, "delegates")
+            }
         }
     }
 
