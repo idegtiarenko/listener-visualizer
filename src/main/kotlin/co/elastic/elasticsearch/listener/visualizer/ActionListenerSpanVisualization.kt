@@ -9,6 +9,7 @@ import java.awt.Dimension
 import javax.swing.Icon
 import javax.swing.JButton
 import javax.swing.JComponent
+import kotlin.math.max
 
 class ActionListenerSpanVisualization {
 
@@ -26,41 +27,17 @@ class ActionListenerSpanVisualization {
         maxDepth += HEIGHT
         children()
         depth -= HEIGHT
-        if (offset == startOffset) {
-            offset += WIDTH
-        }
-        component.add(PointerButton(element, AllIcons.Debugger.Frame, description).apply {
-            setBounds(startOffset, startDepth, offset - startOffset, HEIGHT)
-        })
+        val button = JButton(description, AllIcons.Debugger.Frame).withNavigationTo(element)
+        val width = max(offset - startOffset, button.desiredWidth())
+        offset = startOffset + width
+        button.setBounds(startOffset, startDepth, width, HEIGHT)
+        component.add(button)
     }
 
-    fun addResponse(element: PsiElement, description: String) {
-        component.add(PointerButton(element, AllIcons.Status.Success, description).apply {
-            setBounds(offset, depth, WIDTH, HEIGHT)
-        })
-        offset += WIDTH
-    }
-
-    fun addFailure(element: PsiElement, description: String) {
-        component.add(PointerButton(element, AllIcons.General.Error, description).apply {
-            setBounds(offset, depth, WIDTH, HEIGHT)
-        })
-        offset += WIDTH
-    }
-
-    fun addInfo(element: PsiElement, description: String) {
-        component.add(PointerButton(element, AllIcons.General.Information, description).apply {
-            setBounds(offset, depth, WIDTH, HEIGHT)
-        })
-        offset += WIDTH
-    }
-
-    fun addWarning(element: PsiElement, description: String) {
-        component.add(PointerButton(element, AllIcons.General.Warning, description).apply {
-            setBounds(offset, depth, WIDTH, HEIGHT)
-        })
-        offset += WIDTH
-    }
+    fun addResponse(element: PsiElement, description: String) = add(element, AllIcons.Status.Success, description)
+    fun addFailure(element: PsiElement, description: String) = add(element, AllIcons.General.Error, description)
+    fun addInfo(element: PsiElement, description: String) = add(element, AllIcons.General.Information, description)
+    fun addWarning(element: PsiElement, description: String) = add(element, AllIcons.General.Warning, description)
 
     fun build(): JComponent = component
 
@@ -68,12 +45,20 @@ class ActionListenerSpanVisualization {
         override fun getPreferredSize(): Dimension = Dimension(offset, maxDepth)
     }
 
-    private class PointerButton(element: PsiElement, icon: Icon, description: String) : JButton(description) {
-        private val pointer = PsiElementPointer(element)
-        init {
-            this.icon = icon
-            addActionListener { pointer.navigate() }
-        }
+    private fun add(element: PsiElement, icon: Icon, description: String) {
+        val button = JButton(description, icon).withNavigationTo(element)
+        val width = button.desiredWidth()
+        button.setBounds(offset, depth, width, HEIGHT)
+        component.add(button)
+        offset += width
+    }
+
+    private fun JButton.desiredWidth(): Int = getFontMetrics(font).stringWidth(text) + 35// icon and border margin
+
+    private fun JButton.withNavigationTo(element: PsiElement): JButton {
+        val pointer = PsiElementPointer(element)
+        addActionListener { pointer.navigate() }
+        return this
     }
 
     private class PsiElementPointer(element: PsiElement) {
@@ -90,7 +75,6 @@ class ActionListenerSpanVisualization {
     }
 
     companion object {
-        const val WIDTH = 150
-        const val HEIGHT = 25
+        private const val HEIGHT = 25
     }
 }
