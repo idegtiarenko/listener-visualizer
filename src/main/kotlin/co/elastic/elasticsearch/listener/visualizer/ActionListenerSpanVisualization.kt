@@ -3,6 +3,7 @@ package co.elastic.elasticsearch.listener.visualizer
 import co.elastic.elasticsearch.CodeLocation
 import com.intellij.icons.AllIcons
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiReferenceExpression
 import com.intellij.psi.SmartPointerManager
 import com.intellij.ui.components.JBPanel
 import com.intellij.util.PsiNavigateUtil
@@ -28,7 +29,7 @@ class ActionListenerSpanVisualization {
         maxDepth += HEIGHT
         children()
         depth -= HEIGHT
-        val button = JButton(description, AllIcons.Debugger.Frame).withNavigationTo(element)
+        val button = JButton(description, AllIcons.Debugger.Frame).withNavigationTo(element, description)
         val width = max(offset - startOffset, button.desiredWidth())
         offset = startOffset + width
         button.setBounds(startOffset, startDepth, width, HEIGHT)
@@ -42,12 +43,12 @@ class ActionListenerSpanVisualization {
 
     fun build(): JComponent = component
 
-    inner class ActionListenerViewPanel : JBPanel<ActionListenerViewPanel>(null) {
+    inner class ActionListenerViewPanel: JBPanel<ActionListenerViewPanel>(null) {
         override fun getPreferredSize(): Dimension = Dimension(offset, maxDepth)
     }
 
     private fun add(element: PsiElement, icon: Icon, description: String) {
-        val button = JButton(description, icon).withNavigationTo(element)
+        val button = JButton(description, icon).withNavigationTo(element, description)
         val width = button.desiredWidth()
         button.setBounds(offset, depth, width, HEIGHT)
         component.add(button)
@@ -56,10 +57,14 @@ class ActionListenerSpanVisualization {
 
     private fun JButton.desiredWidth(): Int = getFontMetrics(font).stringWidth(text) + 35// icon and border margin
 
-    private fun JButton.withNavigationTo(element: PsiElement): JButton {
+    private fun JButton.withNavigationTo(element: PsiElement, description: String): JButton {
         val pointer = PsiElementPointer(element)
         addActionListener { pointer.navigate() }
-        toolTipText = CodeLocation.from(element).toString()
+        if (element is PsiReferenceExpression) {
+            toolTipText = "${element.text} $description at ${CodeLocation.from(element)}"
+        } else {
+            toolTipText = "$description at ${CodeLocation.from(element)}"
+        }
         return this
     }
 

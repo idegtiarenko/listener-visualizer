@@ -39,10 +39,12 @@ object ActionListenerPsiUtils {
         if (signature == null) {
             return false
         }
+        // TODO: moar methods from ActionListener
         return signature.equals("org.elasticsearch.action.ActionListener:runBefore") ||
                 signature.equals("org.elasticsearch.action.ActionListener:runAfter") ||
                 signature.equals("org.elasticsearch.action.ActionListener:releaseBefore") ||
-                signature.equals("org.elasticsearch.action.ActionListener:releaseAfter");
+                signature.equals("org.elasticsearch.action.ActionListener:releaseAfter") ||
+                signature.equals("org.elasticsearch.action.ActionListener:run");
     }
 
     fun isDelegate(signature: String?): Boolean {
