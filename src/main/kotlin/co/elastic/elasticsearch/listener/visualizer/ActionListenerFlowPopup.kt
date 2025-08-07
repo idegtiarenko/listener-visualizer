@@ -1,12 +1,12 @@
 package co.elastic.elasticsearch.listener.visualizer
 
+import co.elastic.elasticsearch.CodeLocation
+import co.elastic.elasticsearch.PsiElementPointer
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isActionListener
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isActionListenerWrapper
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isDelegate
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.signature
 import com.intellij.openapi.application.ApplicationManager
-import com.intellij.openapi.diagnostic.logger
-import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.psi.*
 import com.intellij.psi.javadoc.PsiDocTagValue
@@ -14,7 +14,6 @@ import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.childrenOfType
 import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.treeStructure.Tree
-import com.intellij.util.PsiNavigateUtil
 import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JComponent
@@ -33,13 +32,7 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
         return JBScrollPane(Tree(explore(element, 5, "inspected")).apply {
             addMouseListener(object: MouseAdapter() {
                 override fun mouseClicked(e: MouseEvent) {
-                    val element = (getPathForLocation(e.x, e.y)?.lastPathComponent as ListenerTreeNode).element()
-                    if (element != null && element.isValid) {
-                        PsiNavigateUtil.navigate(element)
-                    } else {
-                        // TODO navigate once component become invalid
-                        logger<ActionListenerFlowPopup>().info("Element is invalidated")
-                    }
+                    (getPathForLocation(e.x, e.y)?.lastPathComponent as ListenerTreeNode).pointer.navigate()
                 }
             })
         })
@@ -192,32 +185,16 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
     class ListenerTreeNode(element: PsiElement, val description: String, val replacementText: String? = null):
         DefaultMutableTreeNode() {
 
-        val location: Location = Location.from(element)
-        private val pointer: SmartPsiElementPointer<PsiElement> =
-            SmartPointerManager.getInstance(element.project).createSmartPsiElementPointer(element)
-
-        fun element(): PsiElement? = pointer.element
+        val location: CodeLocation = CodeLocation.from(element)
+        val pointer: PsiElementPointer = PsiElementPointer(element)
 
         override fun toString(): String {
             return ApplicationManager.getApplication().runReadAction<String> {
-                if (pointer.element?.isValid ?: false) describe(pointer.element!!) else "<Invalidated>"
+                if (pointer.element()?.isValid ?: false) describe(pointer.element()!!) else "<Invalidated>"
             }
         }
 
         private fun describe(element: PsiElement): String =
             "${replacementText ?: element.text} $description at $location"
-    }
-
-    class Location(val file: String, val line: Int): Comparable<Location> {
-        companion object {
-            fun from(element: PsiElement): Location {
-                val file = element.containingFile.virtualFile
-                val line =
-                    FileDocumentManager.getInstance().getDocument(file)?.getLineNumber(element.textOffset) ?: -1
-                return Location(file.name, line)
-            }
-        }
-        override fun compareTo(other: Location): Int = compareValuesBy(this, other, {it.file}, {it.line})
-        override fun toString(): String = "$file:$line"
     }
 }

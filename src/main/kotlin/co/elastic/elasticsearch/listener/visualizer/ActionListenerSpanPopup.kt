@@ -1,6 +1,6 @@
 package co.elastic.elasticsearch.listener.visualizer
 
-import co.elastic.elasticsearch.listener.visualizer.ActionListenerFlowPopup.Location
+import co.elastic.elasticsearch.CodeLocation
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isActionListenerWrapper
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isDelegate
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.shortSignature
@@ -41,7 +41,7 @@ class ActionListenerSpanPopup(val element: PsiElement): DialogWrapper(element.pr
      */
     private fun ActionListenerSpanVisualization.exploreFrom(element: PsiElement, depth: Int) {
         ReferencesSearch.search(element).findAll()
-            .sortedBy { Location.from(it.element) }
+            .sortedBy { CodeLocation.from(it.element) }
             .forEach { categorize(it.element, depth) }
     }
 

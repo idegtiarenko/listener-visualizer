@@ -1,5 +1,6 @@
 package co.elastic.elasticsearch.listener.visualizer
 
+import co.elastic.elasticsearch.CodeLocation
 import com.intellij.icons.AllIcons
 import com.intellij.psi.PsiElement
 import com.intellij.psi.SmartPointerManager
@@ -58,6 +59,7 @@ class ActionListenerSpanVisualization {
     private fun JButton.withNavigationTo(element: PsiElement): JButton {
         val pointer = PsiElementPointer(element)
         addActionListener { pointer.navigate() }
+        toolTipText = CodeLocation.from(element).toString()
         return this
     }
 
