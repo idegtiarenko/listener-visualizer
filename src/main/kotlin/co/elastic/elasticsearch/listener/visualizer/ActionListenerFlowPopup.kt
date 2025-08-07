@@ -1,5 +1,6 @@
 package co.elastic.elasticsearch.listener.visualizer
 
+import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isActionListener
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isActionListenerWrapper
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.isDelegate
 import co.elastic.elasticsearch.listener.visualizer.ActionListenerPsiUtils.signature
@@ -8,6 +9,7 @@ import com.intellij.openapi.diagnostic.logger
 import com.intellij.openapi.fileEditor.FileDocumentManager
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.psi.*
+import com.intellij.psi.javadoc.PsiDocTagValue
 import com.intellij.psi.search.searches.ReferencesSearch
 import com.intellij.psi.util.childrenOfType
 import com.intellij.ui.components.JBScrollPane
@@ -62,6 +64,25 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
         return root
     }
 
+    private fun exploreMethodCall(element: PsiElement, depth: Int, replacementText: String? = null): ListenerTreeNode? {
+        val call = element.parent.parent as? PsiMethodCallExpression ?: return null
+        val methodName = call.methodExpression.referenceName
+        val paramIndex = call.argumentList.expressions.indexOf(element)
+        val target = call.methodExpression.resolve()
+        if (target != null && paramIndex != -1 && depth >= 0) {
+            val param = target.childrenOfType<PsiParameterList>()[0].parameters[paramIndex]
+            val passNode = ListenerTreeNode(element, "passed as an argument to $methodName(..) call", replacementText)
+            if (isActionListener(param)) {
+                passNode.apply {
+                    insert(explore(param, depth - 1, "passed as ${param.name} in $methodName(..)"), 0)
+                }
+            }
+            return passNode
+        } else {
+            return ListenerTreeNode(element, "passed as an argument to $methodName(..) call", replacementText)
+        }
+    }
+
     private fun exploreDelegate(delegate: PsiElement, depth: Int, description: String): ListenerTreeNode {
         // Delegate structure: listener.delegateFailure((l, indexResolution) -> { code using l })
         // We need to find "l" and explore the code with l as the element
@@ -75,7 +96,13 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
                 val listenerParam = lambdaParams[0]
                 // Explore the body of the lambda with the new listener parameter
                 // TODO: can we rename it so it reports "listener" instead of "l"?
-                return exploreFrom(listenerParam, root, depth)
+                val delegateNode = exploreFrom(listenerParam, root, depth)
+                // If the call itself is an argument to another method call, and that method call receives a listener, then we need to explore that as well
+                val passNode = exploreMethodCall(call, depth, delegate.text)
+                if (passNode != null) {
+                    delegateNode.insert(passNode, delegateNode.childCount)
+                }
+                return delegateNode
             }
         }
         return root
@@ -145,17 +172,7 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
                     if (isActionListenerWrapper(signature)) {
                         return null
                     }
-                    val methodName = call.methodExpression.referenceName
-                    val paramIndex = call.argumentList.expressions.indexOf(element)
-                    val target = call.methodExpression.resolve()
-                    if (target != null && paramIndex != -1 && depth >= 0) {
-                        val param = target.childrenOfType<PsiParameterList>()[0].parameters[paramIndex]
-                        ListenerTreeNode(element, "passed as an argument to $methodName(..) call").apply {
-                            insert(explore(param, depth - 1, "passed as ${param.name} in $methodName(..)"), 0)
-                        }
-                    } else {
-                        ListenerTreeNode(element, "passed as an argument to $methodName(..) call")
-                    }
+                    exploreMethodCall(element, depth)
                 }
             }
         }
@@ -164,10 +181,16 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
             return categorizeAssignment(element)
         }
 
+        if (element is PsiDocTagValue) {
+            // Ignore doc references for now
+            return null
+        }
+
         return ListenerTreeNode(element, "non analyzed")
     }
 
-    class ListenerTreeNode(element: PsiElement, val description: String): DefaultMutableTreeNode() {
+    class ListenerTreeNode(element: PsiElement, val description: String, val replacementText: String? = null):
+        DefaultMutableTreeNode() {
 
         val location: Location = Location.from(element)
         private val pointer: SmartPsiElementPointer<PsiElement> =
@@ -181,14 +204,16 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
             }
         }
 
-        private fun describe(element: PsiElement): String = "${element.text} $description at $location"
+        private fun describe(element: PsiElement): String =
+            "${replacementText ?: element.text} $description at $location"
     }
 
     class Location(val file: String, val line: Int) {
         companion object {
             fun from(element: PsiElement): Location {
                 val file = element.containingFile.virtualFile
-                val line = FileDocumentManager.getInstance().getDocument(file)?.getLineNumber(element.textOffset) ?: -1
+                val line =
+                    FileDocumentManager.getInstance().getDocument(file)?.getLineNumber(element.textOffset) ?: -1
                 return Location(file.name, line)
             }
         }
