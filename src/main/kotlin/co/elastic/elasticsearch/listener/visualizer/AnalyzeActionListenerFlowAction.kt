@@ -8,7 +8,7 @@ import com.intellij.openapi.actionSystem.AnActionEvent
 import com.intellij.openapi.actionSystem.CommonDataKeys
 
 
-class AnalyzeActionListenerAction: AnAction(), ActionUpdateThreadAware {
+class AnalyzeActionListenerFlowAction: AnAction(), ActionUpdateThreadAware {
 
     override fun getActionUpdateThread(): ActionUpdateThread {
         return ActionUpdateThread.BGT
@@ -25,6 +25,4 @@ class AnalyzeActionListenerAction: AnAction(), ActionUpdateThreadAware {
             ActionListenerFlowPopup(element).show()
         }
     }
-
-
 }

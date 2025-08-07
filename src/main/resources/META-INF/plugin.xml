@@ -18,10 +18,18 @@
 
     <actions>
         <action
-                id="AnalyzeActionListenerAction"
-                class="co.elastic.elasticsearch.listener.visualizer.AnalyzeActionListenerAction"
-                text="Analyze ActionListener"
+                id="AnalyzeActionListenerFlowAction"
+                class="co.elastic.elasticsearch.listener.visualizer.AnalyzeActionListenerFlowAction"
+                text="Analyze ActionListener (tree)"
                 description="Analyzes ActionListener flow to resolution"
+                icon="/co/elastic/elasticsearch/icons/es.png">
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+        </action>
+        <action
+                id="AnalyzeActionListenerSpanAction"
+                class="co.elastic.elasticsearch.listener.visualizer.AnalyzeActionListenerSpanAction"
+                text="Analyze ActionListener (span)"
+                description="Analyzes ActionListener span to resolution"
                 icon="/co/elastic/elasticsearch/icons/es.png">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>

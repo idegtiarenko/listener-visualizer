@@ -208,7 +208,7 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
             "${replacementText ?: element.text} $description at $location"
     }
 
-    class Location(val file: String, val line: Int) {
+    class Location(val file: String, val line: Int): Comparable<Location> {
         companion object {
             fun from(element: PsiElement): Location {
                 val file = element.containingFile.virtualFile
@@ -217,7 +217,7 @@ class ActionListenerFlowPopup(val element: PsiElement): DialogWrapper(element.pr
                 return Location(file.name, line)
             }
         }
-
+        override fun compareTo(other: Location): Int = compareValuesBy(this, other, {it.file}, {it.line})
         override fun toString(): String = "$file:$line"
     }
 }
