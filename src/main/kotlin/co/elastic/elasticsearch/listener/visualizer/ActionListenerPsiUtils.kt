@@ -1,7 +1,10 @@
 package co.elastic.elasticsearch.listener.visualizer
 
+import andel.intervals.toReversedList
 import com.intellij.psi.PsiElement
+import com.intellij.psi.PsiExpression
 import com.intellij.psi.PsiField
+import com.intellij.psi.PsiLambdaExpression
 import com.intellij.psi.PsiLocalVariable
 import com.intellij.psi.PsiMethod
 import com.intellij.psi.PsiMethodCallExpression
@@ -57,5 +60,29 @@ object ActionListenerPsiUtils {
                 signature.equals("org.elasticsearch.action.ActionListener:delegateFailureIgnoreResponseAndWrap");
     }
 
+    /**
+     * For patterns like methodCall((listener, args) -> { .. }) extracts listener
+     */
+    fun unwrapLambda(call: PsiMethodCallExpression): PsiParameter? {
+        // For now, we assume the listener is always the first argument. Yes, this is wrong.
+        val firstArgument = call.argumentList.expressions.first()
+        if (firstArgument is PsiLambdaExpression
+            && firstArgument.body != null
+            && firstArgument.parameterList.parameters.isNotEmpty()) {
+            return firstArgument.parameterList.parameters.first()
+        } else {
+            return null
+        }
+    }
 
+    /**
+     * Split chain calls (like something.a().b().c()) into a list of [a(),b(),c()]
+     */
+    fun callChain(call: PsiMethodCallExpression): List<PsiMethodCallExpression> = sequence {
+        var current: PsiExpression? = call
+        while (current is PsiMethodCallExpression) {
+            yield(current)
+            current = current.methodExpression.qualifierExpression
+        }
+    }.toReversedList()
 }
