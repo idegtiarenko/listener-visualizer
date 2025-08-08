@@ -29,6 +29,10 @@ object ActionListenerPsiUtils {
         return "${method.containingClass?.name}:${method.name}"
     }
 
+    fun methodSignature(method: PsiMethod): String {
+        return "${method.containingClass?.qualifiedName}:${method.name}(${method.parameterList.parameters.joinToString { it.type.canonicalText }})"
+    }
+
     fun isActionListener(element: PsiElement): Boolean {
         return when (element) {
             is PsiParameter -> InheritanceUtil.isInheritor(element.type, "org.elasticsearch.action.ActionListener")
