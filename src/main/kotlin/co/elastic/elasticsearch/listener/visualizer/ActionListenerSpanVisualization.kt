@@ -20,13 +20,13 @@ class ActionListenerSpanVisualization {
     private var offset: Int = 0
     private var depth: Int = 0
 
-    private var maxDepth: Int = HEIGHT
+    private var maxDepth: Int = 0
 
     fun span(element: PsiElement, description: String, children: () -> Unit) {
         val startOffset = offset
         val startDepth = depth
         depth += HEIGHT
-        maxDepth += HEIGHT
+        maxDepth = max(depth, maxDepth)
         children()
         depth -= HEIGHT
         val button = JButton(description, AllIcons.Debugger.Frame).withNavigationTo(element, description)
@@ -44,7 +44,7 @@ class ActionListenerSpanVisualization {
     fun build(): JComponent = component
 
     inner class ActionListenerViewPanel: JBPanel<ActionListenerViewPanel>(null) {
-        override fun getPreferredSize(): Dimension = Dimension(offset, maxDepth)
+        override fun getPreferredSize(): Dimension = Dimension(offset, maxDepth + HEIGHT)
     }
 
     private fun add(element: PsiElement, icon: Icon, description: String) {
